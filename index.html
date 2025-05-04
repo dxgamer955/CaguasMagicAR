@@ -8,9 +8,65 @@
   <style>
     body { margin: 0; overflow: hidden; }
     #ar-container { width: 100vw; height: 100vh; position: relative; }
+
+    /* 📌 Texto fijo en esquina superior izquierda */
+    #live-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgb(0, 0, 0);
+      color: white;
+      font-weight: bold;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-family: sans-serif;
+      z-index: 10;
+    }
+
+   /* 🟡 Banner Breaking News con texto en scroll */
+#breaking-news {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  background-color: rgba(255, 215, 0, 0.95);
+  overflow: hidden;
+  z-index: 10;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+}
+
+#breaking-news-text {
+  white-space: nowrap;
+  display: inline-block;
+  padding-left: 100%;
+  animation: scroll-left 15s linear infinite;
+  font-weight: bold;
+  font-family: sans-serif;
+  font-size: 1.1rem;
+  color: black;
+}
+
+/* animación de scroll horizontal */
+@keyframes scroll-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
   </style>
 </head>
 <body>
+  <!-- 🔴 Texto Taina LIVE -->
+  <div id="live-label">🔴 LIVE</div>
+
+  <!-- 🟡 Breaking news banner scroll -->
+<div id="breaking-news">
+  <div id="breaking-news-text">La estatua de la india Taina cobra vida en Caguas!</div>
+</div>
+
+
   <div id="ar-container"></div>
 
   <script>
@@ -24,21 +80,68 @@
       const { renderer, scene, camera } = mindarThree;
       const anchor = mindarThree.addAnchor(0);
 
-      // Cargador GLTF
+      // 💡 Iluminación
+      const ambientLight = new THREE.AmbientLight(0xffffff, 5);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+      directionalLight.position.set(0, 0, 5);
+      scene.add(directionalLight);
+
+      // 🌫️ Blur con textura
+      const blurTexture = new THREE.TextureLoader().load('blur_background_3.png');
+
+      const blurMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          u_texture: { value: blurTexture },
+          u_opacity: { value: 1 }
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec2 vUv;
+          uniform sampler2D u_texture;
+          uniform float u_opacity;
+
+          void main() {
+            vec4 color = texture2D(u_texture, vUv);
+            float dist = distance(vUv, vec2(0.5));
+            float alpha = smoothstep(0.4, 0.05, dist) * u_opacity;
+            gl_FragColor = vec4(color.rgb, alpha);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+
+      const blurPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.2, 1.2),
+        blurMaterial
+      );
+      blurPlane.position.set(0.002, 0.48, -0.08);
+      anchor.group.add(blurPlane);
+
+      // 📦 Cargar modelo GLB y reproducir animación 2
       const loader = new THREE.GLTFLoader();
       let mixer;
 
-      loader.load("./taina_w_anim_test.glb", (gltf) => {
+      loader.load("./india_anim_2.glb", (gltf) => {
         const model = gltf.scene;
-        model.scale.set(0.3, 0.3, 0.3); // ajusta tamaño si es necesario
+        model.scale.set(0.3, 0.3, 0.3);
+        model.position.set(0, -0.09, 0); // mueve el modelo más abajo en Y
         anchor.group.add(model);
 
-        // Si tiene animaciones
-        if (gltf.animations.length > 0) {
+        if (gltf.animations.length > 1) {
           mixer = new THREE.AnimationMixer(model);
-          gltf.animations.forEach((clip) => {
-            mixer.clipAction(clip).play();
-          });
+          const clip = gltf.animations[1]; // Animación 2
+          const action = mixer.clipAction(clip);
+          action.setEffectiveTimeScale(1); // velocidad 1x
+          action.play();
         }
       }, undefined, (error) => {
         console.error("Error cargando el modelo:", error);
@@ -47,6 +150,7 @@
       await mindarThree.start();
 
       const clock = new THREE.Clock();
+
       renderer.setAnimationLoop(() => {
         const delta = clock.getDelta();
         if (mixer) mixer.update(delta);
