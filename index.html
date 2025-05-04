@@ -142,7 +142,7 @@
           mixer = new THREE.AnimationMixer(model);
           const clip = gltf.animations[1]; // Animación 2
           const action = mixer.clipAction(clip);
-          action.setEffectiveTimeScale(1); // velocidad 1x
+          action.setEffectiveTimeScale(0.5); // velocidad 1x
           action.play();
         }
       }, undefined, (error) => {
